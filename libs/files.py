@@ -104,6 +104,9 @@ class FilePath(object):
             if b_valid:
                 lo_clean_file_objects.append(o_element_fp)
 
+        # os.listdir doesn't return elements sorted in any way, and maybe os.walk neither so I have to do it manually.
+        lo_clean_file_objects.sort(key=lambda x: x.u_path, reverse=False)
+
         return lo_clean_file_objects
 
     def exists(self):

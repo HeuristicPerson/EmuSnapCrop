@@ -6,9 +6,6 @@ import sys
 
 from PIL import Image
 
-from Tkinter import Canvas
-from Tkinter import Tk
-from Tkinter import PhotoImage
 import Tkinter
 import tkMessageBox
 
@@ -23,6 +20,7 @@ from libs import tkinter_extra
 #=======================================================================================================================
 u_PROG_NAME = u'EmuSnap Crop v1.0'
 
+
 # HELPER FUNCTIONS
 #=======================================================================================================================
 def is_rect_color(pti_color=(0, 0, 0), po_img=None, pti_nw=(0, 0), pti_se=(0, 0), pi_scans=1):
@@ -30,16 +28,18 @@ def is_rect_color(pti_color=(0, 0, 0), po_img=None, pti_nw=(0, 0), pti_se=(0, 0)
     Function to get the colors of some random points inside a rectangle defined by pti_pos_1 and pti_pos_2.
 
     :param po_img: PIL image object.
-    :param pti_pos_1: Top-left corner of the rectangle. i.e. (0, 0)
-    :param pti_pos_2: Bottom-right corner of the rectangle. i.e. (100, 20)
+
+    :param pti_nw: Top-left corner of the rectangle. i.e. (0, 10)
+
+    :param pti_se: Bottom-right corner of the rectangle. i.e. (100, 20)
+
     :param pi_scans: Number of scan points.
+
+    :param pti_color: Tuple with RGB values (not sure if it's 0-100 or 0-255)
+
     :return: A set of tuples with the RGB values for each point.
     """
     lti_colors = []
-
-    ti_size = po_img.size
-    i_max_x = ti_size[0] - 1
-    i_max_y = ti_size[1] - 1
 
     for i in range(pi_scans):
         ti_point = (random.randint(pti_nw[0], pti_se[0]), random.randint(pti_nw[1], pti_se[1]))
@@ -338,6 +338,7 @@ class ProgramStatus(object):
     def _get_image_fp(self):
         """
         Method to get the current active image_fp.
+
         :return: The current active image_fp
         """
         if self._i_image is None:
@@ -347,7 +348,16 @@ class ProgramStatus(object):
 
         return o_img_fp
 
+    def _get_image_size(self):
+        """
+        Method to get the current image size.
+
+        :return: The current image size. i.e. (320, 240)
+        """
+        return self._ti_image_size
+
     o_image_fp = property(fset=None, fget=_get_image_fp)
+    ti_image_size = property(fset=None, fget=_get_image_size)
 
 
 class ControlsFrame:
@@ -361,13 +371,13 @@ class ControlsFrame:
         :type po_status: ProgramStatus
         :return:
         """
-        # Some widgets' text need encoding so it's clener having them here.
+        # Some widgets' text need encoding so it's cleaner having them here.
         u_top_text = u'⬒'.encode('utf8')
         u_bot_text = u'⬓'.encode('utf8')
         u_left_text = u'◧'.encode('utf8')
         u_right_text = u'◨'.encode('utf8')
-        u_color_text = u'color'.encode('utf8')  # u'𝗰olor'.encode('utf8')
-        u_zoom_text = u'zoom'  # u'𝘇oom'.encode('utf8')
+        u_color_text = u'color'.encode('utf8')
+        u_zoom_text = u'zoom'
         u_plus_text = u'+'.encode('utf8')
         u_less_text = u'-'.encode('utf8')
 
@@ -407,7 +417,7 @@ class ControlsFrame:
         self._o_button_color.grid(row=0, column=6)
 
         self._o_button_zoom = Tkinter.Button(master=self._o_controls_frame, text=u_zoom_text, width=3,
-                                             command=_ctrl_colors_cycle)
+                                             command=_ctrl_zoom_cycle)
         self._o_button_zoom.grid(row=2, column=6)
 
         self._o_button_less = Tkinter.Button(master=self._o_controls_frame, text=u_less_text, width=1,
@@ -424,7 +434,8 @@ class ControlsFrame:
         self._o_button_prev_img = Tkinter.Button(master=self._o_controls_frame, text=u'◀', command=_ctrl_prev_img)
         self._o_button_prev_img.grid(row=1, column=9)
 
-        self._o_button_save_img = Tkinter.Button(master=self._o_controls_frame, text=u'save', command=_create_window_save)
+        self._o_button_save_img = Tkinter.Button(master=self._o_controls_frame, text=u'save',
+                                                 command=_create_window_save)
         self._o_button_save_img.grid(row=0, column=10)
 
         self._o_label_img = Tkinter.Label(master=self._o_controls_frame, textvar=self._o_img)
@@ -481,13 +492,17 @@ class ImgCanvas:
     Class to store the canvas where the screenshot and the cropping boxes are drawn.
     """
     def __init__(self, o_window):
+
+        self._i_crop = 0
+        self._i_zoom = 0
         self._ti_size = (0, 0)
         self._o_image_fp = None
+        self._u_fg_color = u'#ff00ff'
 
-        self._o_canvas = Canvas(o_window,
-                                borderwidth=0, highlightthickness=0, bd=0,
-                                width=self._ti_size[0], height=self._ti_size[1],
-                                bg='black')
+        self._o_canvas = Tkinter.Canvas(o_window,
+                                        borderwidth=0, highlightthickness=0, bd=0,
+                                        width=self._ti_size[0], height=self._ti_size[1],
+                                        bg='black')
 
         # Canvas objects
         #---------------
@@ -574,31 +589,64 @@ class ImgCanvas:
                               self._ti_size[0] - i_crop_right, i_crop_top,
                               self._ti_size[0], self._ti_size[1] - i_crop_bottom)
 
-    def update_image(self, po_prog_status):
+    # WIP
+    def update(self, po_prog_status):
+        """
+        Method to update the "visual" frame depending on the current internal status of the program.
+        :type po_prog_status: ProgramStatus
+        :return:
+        """
+        # Crop update
+        i_crop = po_prog_status.i_crop * po_prog_status.i_zoom
+        if self._i_crop != i_crop:
+            self._update_crop(po_prog_status)
+
+        # Image update
+        if self._o_image_fp != po_prog_status.o_image_fp:
+            self._update_image(po_prog_status)
+            self._update_canvas_size(po_prog_status)
+            self._update_crop(po_prog_status)
+
+        # Zoom update
+        if self._i_zoom != po_prog_status.i_zoom:
+            self._update_zoom(po_prog_status)
+            self._update_canvas_size(po_prog_status)
+            self._update_crop(po_prog_status)
+
+        # Crop bars color update
+        if self._u_fg_color != po_prog_status.u_fg_color:
+            self._update_colors(po_prog_status)
+
+        # Update canvas size
+        ti_size = (po_prog_status.ti_image_size[0] * po_prog_status.i_zoom,
+                   po_prog_status.ti_image_size[1] * po_prog_status.i_zoom)
+        if self._ti_size != ti_size:
+            self._update_canvas_size(po_prog_status)
+            self._update_crop(po_prog_status)
+
+    def _update_image(self, po_prog_status):
         """
         Method to update the image of the canvas.
         :type po_prog_status: ProgramStatus
         :return: Nothing
         """
 
-        # The update_image method is a bit "messy" since we need to update a couple of elements:
+        # The _update_image method is a bit "messy" since we need to update a couple of elements:
         #
         #   1. The FilePath object containing the path of the image.
         #   2. The Tkinter raw or "texture" image that will be painted somewhere.
         #   3. The raw image already painted onto the canvas.
-        if self._o_image_fp != po_prog_status.o_image_fp:
-            self._o_image_fp = po_prog_status.o_image_fp
+        self._o_image_fp = po_prog_status.o_image_fp
 
-            if self._o_image_fp:
-                self._o_orig_image = PhotoImage(file=self._o_image_fp.u_path)
-                # Luckily, Tkinter only accepts integer zooms and the result is not dithered
-                self._o_zoom_image = self._o_orig_image.zoom(po_prog_status.i_zoom)
-                self._o_canvas.itemconfig(self._o_canv_image, image=self._o_zoom_image)
+        if self._o_image_fp:
+            self._o_orig_image = Tkinter.PhotoImage(file=self._o_image_fp.u_path)
+            # Luckily, Tkinter only accepts integer zooms and the result is not dithered
+            self._o_zoom_image = self._o_orig_image.zoom(po_prog_status.i_zoom)
+            self._o_canvas.itemconfig(self._o_canv_image, image=self._o_zoom_image)
 
-                self.update_canvas_size(po_prog_status)
-                #o_main_window.maxsize(500,500)
+            #self._update_canvas_size(po_prog_status)
 
-    def update_crop(self, po_prog_status):
+    def _update_crop(self, po_prog_status):
         """
         Method to update the crop.
         :type po_prog_status: ProgramStatus
@@ -611,7 +659,7 @@ class ImgCanvas:
                                pb_top=po_prog_status.b_top, pb_bottom=po_prog_status.b_bottom,
                                pb_left=po_prog_status.b_left, pb_right=po_prog_status.b_right)
 
-    def update_colors(self, po_prog_status):
+    def _update_colors(self, po_prog_status):
         """
         Method to update the background and foreground colors.
         :type po_prog_status: ProgramStatus
@@ -620,13 +668,16 @@ class ImgCanvas:
         for o_rect in self._to_crop_rectangles:
             self._o_canvas.itemconfig(o_rect, fill=po_prog_status.u_fg_color)
 
-    def update_zoom(self, po_prog_status):
+    def _update_zoom(self, po_prog_status):
+        """
+        Method to update the zoom level
+        :param po_prog_status:
+        :return:
+        """
         self._o_zoom_image = self._o_orig_image.zoom(po_prog_status.i_zoom)
         self._o_canvas.itemconfig(self._o_canv_image, image=self._o_zoom_image)
 
-        self.update_canvas_size(po_prog_status)
-
-    def update_canvas_size(self, po_prog_status):
+    def _update_canvas_size(self, po_prog_status):
         """
         Simple method to update the canvas size.
         :type po_prog_status: ProgramStatus
@@ -636,7 +687,7 @@ class ImgCanvas:
         self._ti_size = (self._o_zoom_image.width(), self._o_zoom_image.height())
         self._o_canvas.config(width=self._ti_size[0], height=self._ti_size[1])
         # 2nd we need to resize and reposition the crop bars
-        self.update_crop(po_prog_status)
+        self._update_crop(po_prog_status)
 
 
 # HELPER FUNCTIONS
@@ -649,14 +700,17 @@ def _create_window_save():
     else:
         print "RAJADO!!!"
 
+
 def _ctrl_switch_crop_top(event=None):
     global o_program_status
     global o_img_canvas
     global o_ctrl_frame
 
+    # 1st we update the internal status of the program
     o_program_status.switch_border('top')
 
-    o_img_canvas.update_crop(o_program_status)
+    # 2nd we cascade the status to the visual elements to reflect the changes
+    o_img_canvas.update(o_program_status)
     o_ctrl_frame.update(o_program_status)
 
 
@@ -667,18 +721,18 @@ def _ctrl_switch_crop_bottom(event=None):
 
     o_program_status.switch_border('bottom')
 
-    o_img_canvas.update_crop(o_program_status)
+    o_img_canvas.update(o_program_status)
     o_ctrl_frame.update(o_program_status)
 
 
-def _ctrl_switch_crop_left(event):
+def _ctrl_switch_crop_left(event=None):
     global o_program_status
     global o_img_canvas
     global o_ctrl_frame
 
     o_program_status.switch_border('left')
 
-    o_img_canvas.update_crop(o_program_status)
+    o_img_canvas.update(o_program_status)
     o_ctrl_frame.update(o_program_status)
 
 
@@ -689,7 +743,7 @@ def _ctrl_switch_crop_right(event=None):
 
     o_program_status.switch_border('right')
 
-    o_img_canvas.update_crop(o_program_status)
+    o_img_canvas._update_crop(o_program_status)
     o_ctrl_frame.update(o_program_status)
 
 
@@ -698,10 +752,13 @@ def _ctrl_crop_inc(event=None):
     global o_img_canvas
     global o_ctrl_frame
 
+    # 1st we update the internal status of the program
     o_program_status.crop_add()
 
-    o_img_canvas.update_crop(o_program_status)
+    # 2nd we cascade that status to the visual elements
+    o_img_canvas.update(o_program_status)
     o_ctrl_frame.update(o_program_status)
+
 
 def _ctrl_crop_inc_jump(event=None):
     """
@@ -713,10 +770,13 @@ def _ctrl_crop_inc_jump(event=None):
     global o_img_canvas
     global o_ctrl_frame
 
+    # 1st we update the internal status of the program
     o_program_status.crop_add(pi_value=8)
 
-    o_img_canvas.update_crop(o_program_status)
+    # 2nd we cascade the updated status to the visual elements
+    o_img_canvas.update(o_program_status)
     o_ctrl_frame.update(o_program_status)
+
 
 def _ctrl_crop_dec_jump(event=None):
     """
@@ -730,7 +790,7 @@ def _ctrl_crop_dec_jump(event=None):
 
     o_program_status.crop_add(pi_value=-8)
 
-    o_img_canvas.update_crop(o_program_status)
+    o_img_canvas._update_crop(o_program_status)
     o_ctrl_frame.update(o_program_status)
 
 
@@ -741,27 +801,34 @@ def _ctrl_crop_dec(event=None):
 
     o_program_status.crop_add(pi_value=-1)
 
-    o_img_canvas.update_crop(o_program_status)
+    o_img_canvas._update_crop(o_program_status)
     o_ctrl_frame.update(o_program_status)
 
 
-def _ctrl_zoom_cycle(event):
+def _ctrl_zoom_cycle(event=None):
     global o_program_status
     global o_img_canvas
+    global o_ctrl_frame
 
+    # 1st we update the internal status of the program
     o_program_status.zoom_cycle()
-    o_img_canvas.update_zoom(o_program_status)
-    print o_program_status
+
+    # 2nd we send that status to the proper GUI elements to update them
+    o_img_canvas.update(o_program_status)
+    o_ctrl_frame.update(o_program_status)
 
 
 def _ctrl_colors_cycle(event=None):
     global o_program_status
     global o_img_canvas
+    global o_ctrl_frame
 
+    # 1st we update the interla status of the program
     o_program_status.colors_cycle()
-    o_img_canvas.update_colors(o_program_status)
 
-    print o_program_status
+    # 2nd we "cascade" that status to the visual elements
+    o_img_canvas.update(o_program_status)
+    o_ctrl_frame.update(o_program_status)
 
 
 def _ctrl_close(event):
@@ -769,7 +836,7 @@ def _ctrl_close(event):
 
 
 def _ctrl_save(event):
-    print 'Quieres grabar, tunante...'
+    print u'GRABANDO!!!'
 
 
 def _ctrl_next_img(event=None):
@@ -781,7 +848,7 @@ def _ctrl_next_img(event=None):
     o_program_status.next_img()
 
     # 2nd we send that status to the proper GUI elements to update them
-    o_img_canvas.update_image(o_program_status)
+    o_img_canvas.update(o_program_status)
     o_ctrl_frame.update(o_program_status)
 
 
@@ -794,27 +861,24 @@ def _ctrl_prev_img(event=None):
     o_program_status.prev_img()
 
     # 2nd we send that status to the proper GUI elements to update them
-    o_img_canvas.update_image(o_program_status)
+    o_img_canvas.update(o_program_status)
     o_ctrl_frame.update(o_program_status)
 
 
+# TODO: Main window is not resizable anymore so MAYBE this function can be removed.
 def _ctrl_resize(event):
     """
-    Control function to make main window auto-resizable.
+        Control function to make main window auto-resizable.
 
-    While the main window size configuration is empty, it's auto-resizable. But every time you change the size of the
-    window manually, actually you are setting a fixed size. To avoid it, when resizing the window, this function is
-    called to delete the fixed size making the window auto-resizable again.
+        While the main window size configuration is empty, it's auto-resizable. But every time you change the size of the
+        window manually, actually you are setting a fixed size. To avoid it, when resizing the window, this function is
+        called to delete the fixed size making the window auto-resizable again.
 
-    :param event:
-    :return:
-    """
+        :param event:
+        :return:
+        """
     global o_main_window
     o_main_window.wm_geometry('')
-
-
-# MAIN FUNCTIONS
-#=======================================================================================================================
 
 
 # MAIN CODE
@@ -826,21 +890,36 @@ try:
     u_arg = sys.argv[1].decode('utf8')
 except IndexError:
     u_arg = u''
-
-# DEBUG
-u_arg = u'test_data/img1.png\ntest_data/img2.png\ntest_data/img3.png\ntest_data/img4.png\ntest_data/img5.png'
+o_arg_fp = files.FilePath(u_arg)
 
 o_program_status = ProgramStatus()
 
-for u_line in u_arg.splitlines():
-    o_element_fp = files.FilePath(u_line)
-    o_element_fp = o_element_fp.absfile()
-    print o_element_fp
-    o_program_status.add_image_fp(o_element_fp)
+lo_files_fp = []
 
-print o_program_status
+if o_arg_fp.is_dir():
+    lo_files_fp.extend(o_arg_fp.content(pu_mode='files'))
 
-o_main_window = Tk()
+    for o_file_fp in lo_files_fp:
+        o_program_status.add_image_fp(o_file_fp)
+
+elif o_arg_fp.is_file():
+    o_root_fp = files.FilePath(o_arg_fp.u_root)
+    lo_files_fp.extend(o_root_fp.content(pu_mode='files'))
+
+    for o_file_fp in lo_files_fp:
+        o_program_status.add_image_fp(o_file_fp)
+
+    # I don't have a method to directly jump to a particular image so I have to follow this nasty loop...
+    while o_program_status.o_image_fp.u_path != o_arg_fp.u_path:
+        o_program_status.next_img()
+
+else:
+    raise IOError('argument is not a file or a directory')
+
+
+# Creating and starting the GUI
+#------------------------------
+o_main_window = Tkinter.Tk()
 o_main_window.wm_title(u_PROG_NAME)
 o_main_window.wm_minsize(width=320, height=240)
 o_main_window.resizable(0, 0)
@@ -848,11 +927,8 @@ o_main_window.resizable(0, 0)
 o_img_canvas = ImgCanvas(o_main_window)
 o_ctrl_frame = ControlsFrame(o_main_window, o_program_status)
 
-# On screen controls
-#-------------------
-#_build_controls_frame(o_main_window, po_status=o_program_status)
-
-
+# Keyboard controls
+#------------------
 o_main_window.bind('<w>', _ctrl_switch_crop_top)
 o_main_window.bind('<s>', _ctrl_switch_crop_bottom)
 o_main_window.bind('<a>', _ctrl_switch_crop_left)
@@ -868,11 +944,12 @@ o_main_window.bind('<Shift-KP_Add>', _ctrl_crop_inc_jump)
 o_main_window.bind('<Shift-KP_Subtract>', _ctrl_crop_dec_jump)
 o_main_window.bind('<KP_Add>', _ctrl_crop_inc)
 o_main_window.bind('<KP_Subtract>', _ctrl_crop_dec)
-o_main_window.bind('<Button-4>', _ctrl_crop_inc)            # Mouse scroll wheel up
-o_main_window.bind('<Button-5>', _ctrl_crop_dec)            # Mouse scroll wheel down
+# TODO: Add windows and OSX binds for mouse scroll wheel. YES!!! they use different names :/
+o_main_window.bind('<Button-4>', _ctrl_crop_inc)            # Linux Mouse scroll wheel up
+o_main_window.bind('<Button-5>', _ctrl_crop_dec)            # Linux Mouse scroll wheel down
 
 # Before starting the main loop, I initialize the window with the current status of the program
-o_img_canvas.update_colors(o_program_status)
+o_img_canvas.update(o_program_status)
 o_ctrl_frame.update(o_program_status)
 
 o_main_window.mainloop()
