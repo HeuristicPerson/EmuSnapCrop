@@ -435,7 +435,7 @@ class ControlsFrame:
         self._o_button_prev_img.grid(row=1, column=9)
 
         self._o_button_save_img = Tkinter.Button(master=self._o_controls_frame, text=u'save',
-                                                 command=_create_window_save)
+                                                 command=_ctrl_save)
         self._o_button_save_img.grid(row=0, column=10)
 
         self._o_label_img = Tkinter.Label(master=self._o_controls_frame, textvar=self._o_img)
@@ -692,15 +692,6 @@ class ImgCanvas:
 
 # HELPER FUNCTIONS
 # ======================================================================================================================
-def _create_window_save():
-    b_overwrite = tkMessageBox.askyesno(u'', u'Overwrite the original image?')
-
-    if b_overwrite:
-        print "Sobrescribir, TUNANTE"
-    else:
-        print "RAJADO!!!"
-
-
 def _ctrl_switch_crop_top(event=None):
     global o_program_status
     global o_img_canvas
@@ -788,9 +779,11 @@ def _ctrl_crop_dec_jump(event=None):
     global o_img_canvas
     global o_ctrl_frame
 
+    # 1st we update the program status
     o_program_status.crop_add(pi_value=-8)
 
-    o_img_canvas._update_crop(o_program_status)
+    # 2nd we cascade that status to the visual elements
+    o_img_canvas.update(o_program_status)
     o_ctrl_frame.update(o_program_status)
 
 
@@ -835,8 +828,54 @@ def _ctrl_close(event):
     sys.exit()
 
 
-def _ctrl_save(event):
-    print u'GRABANDO!!!'
+def _ctrl_save(event=None):
+    """
+    Function to save the cropped screenshot to disk.
+    :param event:
+    :return: Nothing.
+    """
+    global o_program_status
+    global o_img_canvas
+    global o_ctrl_frame
+
+    # 1st we open the confirmation dialog
+    b_overwrite = tkMessageBox.askyesno(u'', u'Overwrite the original image?')
+
+    if b_overwrite:
+        # 1st we save the file
+        if o_program_status.i_crop > 0:
+            o_src_img = Image.open(o_program_status.o_image_fp.u_path, 'r')
+            ti_img_size = o_src_img.size
+
+            if o_program_status.b_top:
+                i_crop_n = o_program_status.i_crop
+            else:
+                i_crop_n = 0
+
+            if o_program_status.b_bottom:
+                i_crop_s = ti_img_size[1] - o_program_status.i_crop
+            else:
+                i_crop_s = ti_img_size[1]
+
+            if o_program_status.b_left:
+                i_crop_w = o_program_status.i_crop
+            else:
+                i_crop_w = 0
+
+            if o_program_status.b_right:
+                i_crop_e = ti_img_size[0] - o_program_status.i_crop
+            else:
+                i_crop_e = ti_img_size[0]
+
+            ti_crop = (i_crop_w, i_crop_n, i_crop_e, i_crop_s)
+
+            print ti_crop
+
+            o_dst_img = o_src_img.crop(ti_crop)
+
+            #u_output_file = u'%s_%s.png' % (o_program_status.o_image_fp.u_name, u'crop')
+            u_output_file = u'foo.png'
+            o_dst_img.save(u_output_file)
 
 
 def _ctrl_next_img(event=None):
