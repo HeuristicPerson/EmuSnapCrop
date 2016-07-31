@@ -8,6 +8,7 @@ from PIL import Image
 
 import Tkinter
 import tkMessageBox
+import tkFileDialog
 
 from libs import files
 from libs import tkinter_extra
@@ -71,7 +72,9 @@ class ProgramStatus(object):
         self.i_zoom = 2                             # Zoom multiplier (1, 2, 3 should be enough)
         self._lu_colors = [u'#000000', u'#ff0000',
                            u'#000000', u'#00ff00',
-                           u'#000000', u'#0000ff']  # Background and Foreground color pairs
+                           u'#000000', u'#0000ff',
+                           u'#000000', u'#ff00aa',
+                           u'#000000', u'#ffffff']  # Background and Foreground color pairs
         self._i_colors = 0
         self.u_bg_color = self._lu_colors[0]
         self.u_fg_color = self._lu_colors[1]
@@ -291,7 +294,15 @@ class ProgramStatus(object):
             self.b_right = False
 
         # Typically, the systems I want to process have 8 extra pixels so I'll
-        self.i_crop = min(li_borders) - min(li_borders) % 8
+        if li_borders:
+            self.i_crop = min(li_borders) - min(li_borders) % 8
+        else:
+            self.i_crop = 0
+
+        # When the crop is zero, all the borders are activated for usability reasons. Since that usability feature is
+        # already implemented into "crop_add" method, a quick workaround to apply them is to increment the crop zero
+        # pixels.
+        self.crop_add(pi_value=0)
 
     def next_img(self):
         """
@@ -381,73 +392,93 @@ class ControlsFrame:
         u_plus_text = u'+'.encode('utf8')
         u_less_text = u'-'.encode('utf8')
 
-        self._o_top = Tkinter.BooleanVar()
-        self._o_bottom = Tkinter.BooleanVar()
-        self._o_left = Tkinter.BooleanVar()
-        self._o_right = Tkinter.BooleanVar()
-        self._o_crop = Tkinter.StringVar()
+        self._o_var_top = Tkinter.BooleanVar()
+        self._o_var_bottom = Tkinter.BooleanVar()
+        self._o_var_left = Tkinter.BooleanVar()
+        self._o_var_right = Tkinter.BooleanVar()
+        self._o_var_crop = Tkinter.StringVar()
         self._o_img = Tkinter.StringVar()
-        self._o_file = Tkinter.StringVar()
+        self._o_var_file = Tkinter.StringVar()
+        self._o_var_size_src = Tkinter.StringVar()
+        self._o_var_size_dst = Tkinter.StringVar()
 
-        self._o_controls_frame = Tkinter.Frame(master=po_window, bd=0, relief=None)
-        self._o_controls_frame.pack(fill=Tkinter.X, padx=5, pady=5)
-        self._o_controls_frame.columnconfigure(4, weight=3)
-        self._o_controls_frame.columnconfigure(8, weight=3)
+        # Top Frame
+        #==========
+        self._o_frame_top = Tkinter.Frame(master=po_window, bd=0, relief=Tkinter.GROOVE, borderwidth=2, padx=4, pady=4)
+        self._o_frame_top.pack(fill=Tkinter.X, padx=5, pady=5)
+        self._o_frame_top.columnconfigure(4, weight=3)
+        self._o_frame_top.columnconfigure(8, weight=3)
 
-        self._o_check_up = Tkinter.Checkbutton(master=self._o_controls_frame, text=u_top_text, variable=self._o_top,
+        self._o_check_up = Tkinter.Checkbutton(master=self._o_frame_top, text=u_top_text, variable=self._o_var_top,
                                                onvalue=True, offvalue=False, width=0, command=_ctrl_switch_crop_top)
         self._o_check_up.grid(row=0, column=1)
 
-        self._o_check_down = Tkinter.Checkbutton(master=self._o_controls_frame, text=u_bot_text,
-                                                 variable=self._o_bottom, onvalue=True, offvalue=False,
+        self._o_check_down = Tkinter.Checkbutton(master=self._o_frame_top, text=u_bot_text,
+                                                 variable=self._o_var_bottom, onvalue=True, offvalue=False,
                                                  command=_ctrl_switch_crop_bottom)
         self._o_check_down.grid(row=2, column=1)
 
-        self._o_check_left = Tkinter.Checkbutton(master=self._o_controls_frame, text=u_left_text, variable=self._o_left,
+        self._o_check_left = Tkinter.Checkbutton(master=self._o_frame_top, text=u_left_text, variable=self._o_var_left,
                                                  onvalue=True, offvalue=False, command=_ctrl_switch_crop_left)
         self._o_check_left.grid(row=1, column=0)
 
-        self._o_check_right = Tkinter.Checkbutton(master=self._o_controls_frame, text=u_right_text,
-                                                  variable=self._o_right, onvalue=True, offvalue=False,
+        self._o_check_right = Tkinter.Checkbutton(master=self._o_frame_top, text=u_right_text,
+                                                  variable=self._o_var_right, onvalue=True, offvalue=False,
                                                   command=_ctrl_switch_crop_right)
         self._o_check_right.grid(row=1, column=2)
 
-        self._o_button_color = Tkinter.Button(master=self._o_controls_frame, text=u_color_text, width=3,
+        self._o_button_color = Tkinter.Button(master=self._o_frame_top, text=u_color_text, width=3,
                                               command=_ctrl_colors_cycle)
         self._o_button_color.grid(row=0, column=6)
 
-        self._o_button_zoom = Tkinter.Button(master=self._o_controls_frame, text=u_zoom_text, width=3,
+        self._o_button_zoom = Tkinter.Button(master=self._o_frame_top, text=u_zoom_text, width=3,
                                              command=_ctrl_zoom_cycle)
         self._o_button_zoom.grid(row=2, column=6)
 
-        self._o_button_less = Tkinter.Button(master=self._o_controls_frame, text=u_less_text, width=1,
+        self._o_button_less = Tkinter.Button(master=self._o_frame_top, text=u_less_text, width=1,
                                              command=_ctrl_crop_dec)
         self._o_button_less.grid(row=1, column=5)
 
-        self._o_label_crop = Tkinter.Label(master=self._o_controls_frame, textvar=self._o_crop)
+        self._o_label_crop = Tkinter.Label(master=self._o_frame_top, textvar=self._o_var_crop)
         self._o_label_crop.grid(row=1, column=6)
 
-        self._o_button_more = Tkinter.Button(master=self._o_controls_frame, text=u_plus_text, width=0,
+        self._o_button_more = Tkinter.Button(master=self._o_frame_top, text=u_plus_text, width=0,
                                              command=_ctrl_crop_inc)
         self._o_button_more.grid(row=1, column=7)
 
-        self._o_button_prev_img = Tkinter.Button(master=self._o_controls_frame, text=u'◀', command=_ctrl_prev_img)
+        self._o_button_prev_img = Tkinter.Button(master=self._o_frame_top, text=u'◀', command=_ctrl_prev_img)
         self._o_button_prev_img.grid(row=1, column=9)
 
-        self._o_button_save_img = Tkinter.Button(master=self._o_controls_frame, text=u'save',
-                                                 command=_ctrl_save)
+        self._o_button_save_img = Tkinter.Button(master=self._o_frame_top, text=u'save',
+                                                 command=_ctrl_save_with_confirmation)
         self._o_button_save_img.grid(row=0, column=10)
 
-        self._o_label_img = Tkinter.Label(master=self._o_controls_frame, textvar=self._o_img)
+        self._o_label_img = Tkinter.Label(master=self._o_frame_top, textvar=self._o_img)
         self._o_label_img.grid(row=1, column=10)
 
-        self._o_button_next_img = Tkinter.Button(master=self._o_controls_frame, text=u'▶', command=_ctrl_next_img)
+        self._o_button_next_img = Tkinter.Button(master=self._o_frame_top, text=u'▶', command=_ctrl_next_img)
         self._o_button_next_img.grid(row=1, column=11)
 
-        self._o_label_file = Tkinter.Label(master=self._o_controls_frame, textvar=self._o_file, anchor=Tkinter.CENTER)
-        self._o_label_file.grid(row=3, column=0, columnspan=11)
+        # Bottom Frame
+        #=============
+        self._o_frame_bottom = Tkinter.Frame(master=po_window, relief=Tkinter.GROOVE,
+                                             borderwidth=2, padx=4, pady=4)
+        self._o_frame_bottom.pack(fill=Tkinter.X, padx=5, pady=5)
+        self._o_frame_bottom.columnconfigure(1, weight=3)
+
+        # Bottom section
+        #---------------
+        self._o_label_file = Tkinter.Label(master=self._o_frame_bottom, textvar=self._o_var_file, anchor=Tkinter.CENTER)
+        self._o_label_file.grid(row=0, column=0, columnspan=3)
+
+        self._o_label_src_size = Tkinter.Label(master=self._o_frame_bottom, textvar=self._o_var_size_src)
+        self._o_label_src_size.grid(row=1, column=0, columnspan=1, sticky='w')
+
+        self._o_label_dst_size = Tkinter.Label(master=self._o_frame_bottom, textvar=self._o_var_size_dst)
+        self._o_label_dst_size.grid(row=1, column=2, columnspan=1, sticky='w')
 
         # Hover tips for widgets
+        #-----------------------
         self._o_tip_top = tkinter_extra.ToolTip(self._o_check_up, text=u'[w] Top crop ON/OFF', delay=500)
         self._o_tip_bottom = tkinter_extra.ToolTip(self._o_check_down, text=u'[s] Bottom crop ON/OFF', delay=500)
         self._o_tip_left = tkinter_extra.ToolTip(self._o_check_left, text=u'[a] Left crop ON/OFF', delay=500)
@@ -475,16 +506,55 @@ class ControlsFrame:
         """
 
         # The checkboxes status are updated accordingly the internal status of the program
-        self._o_top.set(po_status.b_top)
-        self._o_bottom.set(po_status.b_bottom)
-        self._o_left.set(po_status.b_left)
-        self._o_right.set(po_status.b_right)
+        self._o_var_top.set(po_status.b_top)
+        self._o_var_bottom.set(po_status.b_bottom)
+        self._o_var_left.set(po_status.b_left)
+        self._o_var_right.set(po_status.b_right)
 
         # Now updating the crop label
-        self._o_crop.set(u'%i px' % po_status.i_crop)
-        self._o_img.set(u'%i / %i' % (po_status.i_img + 1, po_status.i_imgs))
+        self._o_var_crop.set(u'%s px' % po_status.i_crop)
+        if po_status.i_img:
+            self._o_img.set(u'%i / %i' % (po_status.i_img + 1, po_status.i_imgs))
+        else:
+            self._o_img.set(u'0 / %i' % po_status.i_imgs)
 
-        self._o_file.set(po_status.o_image_fp.u_file)
+        if po_status.o_image_fp:
+            self._o_var_file.set(u'Image: %s' % po_status.o_image_fp.u_path)
+        else:
+            self._o_var_file.set(u'Image: None')
+
+        # Image information
+        #------------------
+        if po_status.ti_image_size[0] and po_status.ti_image_size[1]:
+            u_src_size = u'Orig. size: %ix%i (%.2f)' % (po_status.ti_image_size[0],
+                                                        po_status.ti_image_size[1],
+                                                        float(po_status.ti_image_size[0]) / po_status.ti_image_size[1])
+        else:
+            u_src_size = u'Orig. size: %ix%i (---)' % (po_status.ti_image_size[0], po_status.ti_image_size[1])
+
+        self._o_var_size_src.set(u_src_size)
+
+        i_hor_sides = 0
+        if po_status.b_left:
+            i_hor_sides += 1
+        if po_status.b_right:
+            i_hor_sides += 1
+
+        i_ver_sides = 0
+        if po_status.b_top:
+            i_ver_sides += 1
+        if po_status.b_bottom:
+            i_ver_sides += 1
+
+        ti_final_size = (po_status.ti_image_size[0] - i_hor_sides * po_status.i_crop,
+                         po_status.ti_image_size[1] - i_ver_sides * po_status.i_crop)
+        if ti_final_size[1]:
+            u_final_aspect = u'%.2f' % (float(ti_final_size[0]) / ti_final_size[1])
+        else:
+            u_final_aspect = u'---'
+
+        u_dst_size = u'Final size: %sx%s (%s)' % (ti_final_size[0], ti_final_size[1], u_final_aspect)
+        self._o_var_size_dst.set(u_dst_size)
 
 
 class ImgCanvas:
@@ -513,8 +583,6 @@ class ImgCanvas:
         self._o_orig_image = Tkinter.PhotoImage(file=u'')
         self._o_zoom_image = None
         self._o_canv_image = self._o_canvas.create_image(0, 0, anchor=Tkinter.NW, image=self._o_zoom_image)
-
-        # stipple='gray75'
 
         self._to_crop_rectangles = [self._o_canvas.create_rectangle(0, 0, 0, 0,
                                                                     fill='red', width=0, stipple='gray50'),
@@ -690,7 +758,7 @@ class ImgCanvas:
         self._update_crop(po_prog_status)
 
 
-# HELPER FUNCTIONS
+# CONTROL FUNCTIONS
 # ======================================================================================================================
 def _ctrl_switch_crop_top(event=None):
     global o_program_status
@@ -828,6 +896,19 @@ def _ctrl_close(event):
     sys.exit()
 
 
+def _ctrl_save_with_confirmation(event=None):
+    global o_main_window
+    global o_program_status
+    global o_img_canvas
+    global o_ctrl_frame
+
+    # 1st we open the confirmation dialog
+    b_overwrite = tkMessageBox.askyesno(u'Overwrite the original image?')
+
+    if b_overwrite:
+        _ctrl_save(event)
+
+
 def _ctrl_save(event=None):
     """
     Function to save the cropped screenshot to disk.
@@ -838,44 +919,40 @@ def _ctrl_save(event=None):
     global o_img_canvas
     global o_ctrl_frame
 
-    # 1st we open the confirmation dialog
-    b_overwrite = tkMessageBox.askyesno(u'', u'Overwrite the original image?')
+    # 1st we save the file
+    if o_program_status.i_crop > 0:
+        o_src_img = Image.open(o_program_status.o_image_fp.u_path, 'r')
+        ti_img_size = o_src_img.size
 
-    if b_overwrite:
-        # 1st we save the file
-        if o_program_status.i_crop > 0:
-            o_src_img = Image.open(o_program_status.o_image_fp.u_path, 'r')
-            ti_img_size = o_src_img.size
+        if o_program_status.b_top:
+            i_crop_n = o_program_status.i_crop
+        else:
+            i_crop_n = 0
 
-            if o_program_status.b_top:
-                i_crop_n = o_program_status.i_crop
-            else:
-                i_crop_n = 0
+        if o_program_status.b_bottom:
+            i_crop_s = ti_img_size[1] - o_program_status.i_crop
+        else:
+            i_crop_s = ti_img_size[1]
 
-            if o_program_status.b_bottom:
-                i_crop_s = ti_img_size[1] - o_program_status.i_crop
-            else:
-                i_crop_s = ti_img_size[1]
+        if o_program_status.b_left:
+            i_crop_w = o_program_status.i_crop
+        else:
+            i_crop_w = 0
 
-            if o_program_status.b_left:
-                i_crop_w = o_program_status.i_crop
-            else:
-                i_crop_w = 0
+        if o_program_status.b_right:
+            i_crop_e = ti_img_size[0] - o_program_status.i_crop
+        else:
+            i_crop_e = ti_img_size[0]
 
-            if o_program_status.b_right:
-                i_crop_e = ti_img_size[0] - o_program_status.i_crop
-            else:
-                i_crop_e = ti_img_size[0]
+        ti_crop = (i_crop_w, i_crop_n, i_crop_e, i_crop_s)
 
-            ti_crop = (i_crop_w, i_crop_n, i_crop_e, i_crop_s)
+        o_dst_img = o_src_img.crop(ti_crop)
+        u_output_file = o_program_status.o_image_fp.u_path
+        o_dst_img.save(u_output_file)
 
-            print ti_crop
-
-            o_dst_img = o_src_img.crop(ti_crop)
-
-            #u_output_file = u'%s_%s.png' % (o_program_status.o_image_fp.u_name, u'crop')
-            u_output_file = u'foo.png'
-            o_dst_img.save(u_output_file)
+        # A quick around to reload the image is to move one image forward and back
+        _ctrl_next_img()
+        _ctrl_prev_img()
 
 
 def _ctrl_next_img(event=None):
@@ -925,14 +1002,35 @@ def _ctrl_resize(event):
 
 # Initialization
 #---------------
+o_program_status = ProgramStatus()
+
+# Creating and starting the GUI
+#------------------------------
+o_main_window = Tkinter.Tk()
+o_main_window.wm_title(u_PROG_NAME)
+o_main_window.wm_minsize(width=320, height=0)
+o_main_window.resizable(0, 0)
+
+o_img_canvas = ImgCanvas(o_main_window)
+o_ctrl_frame = ControlsFrame(o_main_window, o_program_status)
+
 try:
     u_arg = sys.argv[1].decode('utf8')
 except IndexError:
-    u_arg = u''
+    u_arg = tkFileDialog.askopenfilename(master=o_main_window,
+                                         title=u'EmuSnap Crop v1.0 - Open image',
+                                         defaultextension=u'png',
+                                         filetypes=[("Description 1", "*.png"), ("Description 2", "*.jpg")])
+
+# TODO: Exit program when u_arg = empty or current dir doesn't have images. Usability: when no images present, leave
+# program open but showing 0 / 0 images
+if not u_arg:
+    sys.exit()
+
 o_arg_fp = files.FilePath(u_arg)
 
-o_program_status = ProgramStatus()
-
+# Standard process
+#-----------------
 lo_files_fp = []
 
 if o_arg_fp.is_dir():
@@ -955,17 +1053,6 @@ elif o_arg_fp.is_file():
 else:
     raise IOError('argument is not a file or a directory')
 
-
-# Creating and starting the GUI
-#------------------------------
-o_main_window = Tkinter.Tk()
-o_main_window.wm_title(u_PROG_NAME)
-o_main_window.wm_minsize(width=320, height=240)
-o_main_window.resizable(0, 0)
-
-o_img_canvas = ImgCanvas(o_main_window)
-o_ctrl_frame = ControlsFrame(o_main_window, o_program_status)
-
 # Keyboard controls
 #------------------
 o_main_window.bind('<w>', _ctrl_switch_crop_top)
@@ -975,7 +1062,8 @@ o_main_window.bind('<d>', _ctrl_switch_crop_right)
 o_main_window.bind('<z>', _ctrl_zoom_cycle)
 o_main_window.bind('<c>', _ctrl_colors_cycle)
 o_main_window.bind('<Escape>', _ctrl_close)
-o_main_window.bind('<Control-s>', _ctrl_save)
+o_main_window.bind('<Control-s>', _ctrl_save_with_confirmation)
+o_main_window.bind('<Control-Shift-KeyPress-S>', _ctrl_save)
 o_main_window.bind('<Right>', _ctrl_next_img)
 o_main_window.bind('<Left>', _ctrl_prev_img)
 
